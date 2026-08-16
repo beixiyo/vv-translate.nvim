@@ -86,7 +86,11 @@ local manifest = {
 }
 write(vim.fs.joinpath(staging, 'manifest.json'), vim.json.encode(manifest))
 
-local result = vim.system({ tar, '-czf', output, '-C', staging, '.' }, { text = true }):wait()
+-- macOS bsdtar 会把 AppleDouble 元数据写进归档，污染运行时 manifest 契约
+local result = vim.system({ tar, '-czf', output, '-C', staging, '.' }, {
+  text = true,
+  env = { COPYFILE_DISABLE = '1' },
+}):wait()
 delete(staging)
 if result.code ~= 0 then error(vim.trim(result.stderr ~= '' and result.stderr or result.stdout)) end
 
