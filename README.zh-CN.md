@@ -88,7 +88,7 @@ require('vv-translate').setup({
 })
 ```
 
-安装插件后执行一次 `:VVTranslateDownloadDictionary`。该命令会下载最新词典 Release，校验 SHA-256 与 manifest，再安装到 `<plugin-root>/dict`。内置 `local` provider 翻译时不依赖 `translate-shell` 或任何网络服务。插件启动时不会自动检查更新，需要最新版时再次执行该命令即可
+首次翻译时，如果本地没有词典，插件会自动下载最新 Release，校验 SHA-256 与 manifest，再安装到 `<plugin-root>/dict` 并继续刚才的翻译。之后内置 `local` provider 翻译时不依赖 `translate-shell` 或任何网络服务。插件启动时不会检查更新；需要更新或重新安装时可手动执行 `:VVTranslateDownloadDictionary`
 
 语义高亮默认链接到 Neovim 标准高亮组，因此会跟随当前 colorscheme，并在执行 `:colorscheme` 后自动恢复。`highlights` 下的每一项都接受普通的 `nvim_set_hl()` spec；覆盖某项时会完整替换该语义的默认链接
 

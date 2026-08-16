@@ -72,6 +72,16 @@ function M.translate_text(text, opts)
     return
   end
 
+  local local_config = config.providers and config.providers['local'] or {}
+  local dictionary_path = local_config.dictionary_path
+    or require('vv-translate.provider.local.dictionary').default_path()
+  if config.provider == 'local' and vim.fn.isdirectory(dictionary_path) ~= 1 then
+    M.download_dictionary(function(result)
+      if result.ok then M.translate_text(text, opts) end
+    end)
+    return
+  end
+
   local query = opts.identifier and Identifier.normalize(text) or text
   M.close()
   local request_payload = {

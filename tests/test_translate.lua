@@ -167,14 +167,26 @@ ok(vim.deep_equal(render_events, { 'loading', 'result' }) and rendered_text == '
   '自定义 renderer 接收生命周期事件和完整 provider 结果')
 Translate.close()
 
-Translate.setup()
-Translate.translate_text('getUserProfile', { identifier = true })
+local automatic_dictionary = vim.fn.tempname() .. '-vv-translate-auto-dict'
+local dictionary_module = require('vv-translate.dictionary')
+local original_download_latest = dictionary_module.download_latest
+local automatic_downloads = 0
+dictionary_module.download_latest = function(opts, callback)
+  automatic_downloads = automatic_downloads + 1
+  fs.mkdir_p(opts.destination)
+  fs.write_all(vim.fs.joinpath(opts.destination, 'te.json'), '{"test":{"t":"n. 测试"}}')
+  callback({ ok = true, version = 'test', path = opts.destination })
+  return function() end
+end
+Translate.setup({ providers = { ['local'] = { dictionary_path = automatic_dictionary } } })
+Translate.translate_text('test')
+dictionary_module.download_latest = original_download_latest
 local _, offline_buf = require('vv-translate.view').current()
-local offline_result = offline_buf
-  and table.concat(vim.api.nvim_buf_get_lines(offline_buf, 0, -1, false), '\n')
-ok(offline_result and offline_result:match('用户') and offline_result:match('轮廓'),
-  '默认公共路径使用离线词典翻译拆分后的标识符')
+local offline_result = offline_buf and table.concat(vim.api.nvim_buf_get_lines(offline_buf, 0, -1, false), '\n')
+ok(automatic_downloads == 1 and offline_result and offline_result:match('测试'),
+  '首次翻译发现词典缺失时自动安装并继续原请求')
 Translate.close()
+fs.delete(automatic_dictionary)
 
 local loading_callback
 Translate.setup({

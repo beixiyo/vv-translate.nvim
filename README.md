@@ -88,7 +88,7 @@ require('vv-translate').setup({
 })
 ```
 
-After installation, run `:VVTranslateDownloadDictionary` once. It downloads the latest dictionary Release, verifies its SHA-256 checksum and manifest, then installs it to `<plugin-root>/dict`. The built-in `local` provider does not require `translate-shell` or any network service while translating. No automatic update check runs at startup; run the command again whenever you want the latest dictionary.
+On the first translation, a missing dictionary is downloaded automatically from the latest Release, verified with its SHA-256 checksum and manifest, and installed to `<plugin-root>/dict`. The built-in `local` provider does not require `translate-shell` or any network service after that. No update check runs at startup; use `:VVTranslateDownloadDictionary` whenever you want to update or reinstall it manually.
 
 Semantic highlights link to standard Neovim highlight groups by default, so they follow the active colorscheme and are restored after `:colorscheme` changes. Each entry under `highlights` accepts a normal `nvim_set_hl()` specification; an override replaces that semantic role's default link.
 
