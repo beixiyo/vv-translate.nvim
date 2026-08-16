@@ -1,16 +1,12 @@
 -- 离线词典分片加载与缓存，不负责查询策略或结果展示
 local M = {}
 local cache = {}
-
-local source = debug.getinfo(1, 'S').source:sub(2)
-local default_path = source
-for _ = 1, 5 do default_path = vim.fs.dirname(default_path) end
-default_path = vim.fs.joinpath(default_path, 'dict')
+local Path = require('vv-translate.dictionary.path')
 
 ---返回默认词典目录
 ---@return string
 function M.default_path()
-  return default_path
+  return Path.install_dir()
 end
 
 ---读取一个词典分片

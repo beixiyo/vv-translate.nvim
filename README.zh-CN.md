@@ -13,7 +13,7 @@
 - Normal 模式下翻译光标所在单词
 - Visual 模式下翻译精确选区
 - 自动拆分 `camelCase`、`PascalCase`、`snake_case`、`kebab-case` 和连续大写缩写
-- 使用内置英汉词典，无需网络或外部命令
+- 使用可下载的英汉词典，翻译时无需网络或外部命令
 - 按需加载词典分片，并阻止过期请求覆盖最新结果
 - 支持同步或异步的自定义翻译 provider
 
@@ -28,7 +28,13 @@
 {
   'beixiyo/vv-translate.nvim',
   dependencies = { 'beixiyo/vv-utils.nvim' },
-  cmd = { 'VVTranslate', 'VVTranslateWord', 'VVTranslateVisual', 'VVTranslateClose' },
+  cmd = {
+    'VVTranslate',
+    'VVTranslateWord',
+    'VVTranslateVisual',
+    'VVTranslateClose',
+    'VVTranslateDownloadDictionary',
+  },
   keys = {
     { '<leader>tw', '<cmd>VVTranslate<cr>', mode = { 'n', 'x' }, desc = 'Translate text' },
   },
@@ -82,7 +88,7 @@ require('vv-translate').setup({
 })
 ```
 
-内置 `local` provider 将英文单词和代码标识符翻译为中文，不依赖 `translate-shell` 或任何网络服务
+安装插件后执行一次 `:VVTranslateDownloadDictionary`。该命令会下载最新词典 Release，校验 SHA-256 与 manifest，再安装到 `<plugin-root>/dict`。内置 `local` provider 翻译时不依赖 `translate-shell` 或任何网络服务。插件启动时不会自动检查更新，需要最新版时再次执行该命令即可
 
 语义高亮默认链接到 Neovim 标准高亮组，因此会跟随当前 colorscheme，并在执行 `:colorscheme` 后自动恢复。`highlights` 下的每一项都接受普通的 `nvim_set_hl()` spec；覆盖某项时会完整替换该语义的默认链接
 
@@ -96,6 +102,7 @@ Loading 使用 `vv-utils.loading` 在查询文本旁显示动画，并在结果�
 - `:VVTranslateWord` 翻译光标下的单词
 - `:VVTranslateVisual` 翻译当前或最近一次 Visual 选区
 - `:VVTranslateClose` 关闭浮窗并取消当前请求
+- `:VVTranslateDownloadDictionary` 下载并安装最新版离线词典
 
 ## 自定义 provider
 
@@ -166,7 +173,7 @@ Provider 自己负责鉴权、网络传输、重试、响应解析和私有数�
 
 ## 离线词典
 
-内置离线词典改编自采用 MIT 许可证的 [w88975/code-translate-vscode](https://github.com/w88975/code-translate-vscode)，固定来源提交为 `e280dbb1cad87c848f99c17fcd31d63050d395b4`，感谢原作者和贡献者
+可下载的离线词典改编自采用 MIT 许可证的 [w88975/code-translate-vscode](https://github.com/w88975/code-translate-vscode)，固定来源提交为 `e280dbb1cad87c848f99c17fcd31d63050d395b4`，感谢原作者和贡献者
 
 ## 许可证
 

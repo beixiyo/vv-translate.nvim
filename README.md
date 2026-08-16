@@ -13,7 +13,7 @@ Offline-first translation for code identifiers and visual selections in Neovim
 - Translates the word under the cursor in Normal mode
 - Translates the exact selection in Visual mode
 - Splits `camelCase`, `PascalCase`, `snake_case`, `kebab-case`, and uppercase abbreviations
-- Uses a bundled English-Chinese dictionary without network access or external commands
+- Uses a downloadable English-Chinese dictionary without network access during translation
 - Loads dictionary shards on demand and prevents stale requests from replacing newer results
 - Supports custom synchronous or asynchronous translation providers
 
@@ -28,7 +28,13 @@ Offline-first translation for code identifiers and visual selections in Neovim
 {
   'beixiyo/vv-translate.nvim',
   dependencies = { 'beixiyo/vv-utils.nvim' },
-  cmd = { 'VVTranslate', 'VVTranslateWord', 'VVTranslateVisual', 'VVTranslateClose' },
+  cmd = {
+    'VVTranslate',
+    'VVTranslateWord',
+    'VVTranslateVisual',
+    'VVTranslateClose',
+    'VVTranslateDownloadDictionary',
+  },
   keys = {
     { '<leader>tw', '<cmd>VVTranslate<cr>', mode = { 'n', 'x' }, desc = 'Translate text' },
   },
@@ -82,7 +88,7 @@ require('vv-translate').setup({
 })
 ```
 
-The built-in `local` provider translates English words and code identifiers into Chinese. It does not require `translate-shell` or any network service.
+After installation, run `:VVTranslateDownloadDictionary` once. It downloads the latest dictionary Release, verifies its SHA-256 checksum and manifest, then installs it to `<plugin-root>/dict`. The built-in `local` provider does not require `translate-shell` or any network service while translating. No automatic update check runs at startup; run the command again whenever you want the latest dictionary.
 
 Semantic highlights link to standard Neovim highlight groups by default, so they follow the active colorscheme and are restored after `:colorscheme` changes. Each entry under `highlights` accepts a normal `nvim_set_hl()` specification; an override replaces that semantic role's default link.
 
@@ -96,6 +102,7 @@ Loading uses `vv-utils.loading` to animate beside the query and is stopped when 
 - `:VVTranslateWord` translates the word under the cursor
 - `:VVTranslateVisual` translates the current or most recent Visual selection
 - `:VVTranslateClose` closes the floating window and cancels the current request
+- `:VVTranslateDownloadDictionary` downloads and installs the latest offline dictionary
 
 ## Custom providers
 
@@ -166,7 +173,7 @@ Provider-specific authentication, transport, retry, response parsing, and presen
 
 ## Offline dictionary
 
-The bundled offline dictionary is adapted from the MIT-licensed [w88975/code-translate-vscode](https://github.com/w88975/code-translate-vscode) project at commit `e280dbb1cad87c848f99c17fcd31d63050d395b4`. Thanks to its author and contributors.
+The downloadable offline dictionary is adapted from the MIT-licensed [w88975/code-translate-vscode](https://github.com/w88975/code-translate-vscode) project at commit `e280dbb1cad87c848f99c17fcd31d63050d395b4`. Thanks to its author and contributors.
 
 ## License
 

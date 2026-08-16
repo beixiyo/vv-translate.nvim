@@ -1,5 +1,6 @@
 -- vv-translate.nvim 公共入口：组合取词、标识符处理、异步 provider 和浮窗
 local Async = require('vv-utils.async')
+local Dictionary = require('vv-translate.dictionary')
 local Identifier = require('vv-translate.identifier')
 local Provider = require('vv-translate.provider')
 local Source = require('vv-translate.source')
@@ -42,6 +43,22 @@ local defaults = {
 function M.close()
   scope:cancel()
   View.close(false)
+end
+
+---下载并安装最新版离线词典
+---@param callback? fun(result: VVTranslateDictionaryInstallResult)
+---@return fun() cancel
+function M.download_dictionary(callback)
+  vim.notify('Downloading the latest translation dictionary...')
+  local local_config = config.providers and config.providers['local'] or {}
+  return Dictionary.download_latest({ destination = local_config.dictionary_path }, function(result)
+    if result.ok then
+      vim.notify(('Translation dictionary %s installed'):format(result.version))
+    else
+      vim.notify('Failed to install translation dictionary: ' .. result.message, vim.log.levels.ERROR)
+    end
+    if callback then callback(result) end
+  end)
 end
 
 ---翻译给定文本
@@ -122,6 +139,10 @@ function M.setup(opts)
   vim.api.nvim_create_user_command('VVTranslateWord', M.translate_word, { desc = 'Translate word under cursor', force = true })
   vim.api.nvim_create_user_command('VVTranslateVisual', M.translate_visual, { desc = 'Translate visual selection', force = true })
   vim.api.nvim_create_user_command('VVTranslateClose', M.close, { desc = 'Close translation', force = true })
+  vim.api.nvim_create_user_command('VVTranslateDownloadDictionary', M.download_dictionary, {
+    desc = 'Download the latest offline translation dictionary',
+    force = true,
+  })
 end
 
 ---返回归一化后的配置副本

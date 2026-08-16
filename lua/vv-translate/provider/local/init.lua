@@ -21,8 +21,9 @@ function M.translate(request, config, callback)
   if vim.fn.isdirectory(dictionary_path) ~= 1 then
     callback({
       code = 'dictionary_not_found',
-      message = ('Offline dictionary directory not found: %s'):format(dictionary_path),
+      message = 'Offline dictionary not found. Run :VVTranslateDownloadDictionary',
       provider = 'local',
+      cause = dictionary_path,
     }, nil)
     return
   end

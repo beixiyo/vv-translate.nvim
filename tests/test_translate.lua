@@ -30,6 +30,8 @@ local Identifier = require('vv-translate.identifier')
 local Source = require('vv-translate.source')
 local Provider = require('vv-translate.provider')
 local Translate = require('vv-translate')
+local DictionaryInstaller = require('vv-translate.dictionary.installer')
+local fs = require('vv-utils.fs')
 
 local identifier_cases = {
   getUserProfile = 'get user profile',
@@ -294,6 +296,45 @@ local provider_errors_correct = provider_error_code('missing') == 'provider_not_
     present = function() error('boom') end,
   }) == 'provider_presenter_failed'
 ok(provider_errors_correct, 'provider 路由将关键失败归一化为稳定错误码')
+
+local fixture_root = vim.fn.tempname() .. '-vv-translate-test'
+local package_root = vim.fs.joinpath(fixture_root, 'package')
+local archive = vim.fs.joinpath(fixture_root, 'vv-translate-dict.tar.gz')
+local checksum = archive .. '.sha256'
+local release_metadata = vim.fs.joinpath(fixture_root, 'release.json')
+local installed = vim.fs.joinpath(fixture_root, 'installed', 'dict')
+fs.mkdir_p(vim.fs.joinpath(package_root, 'dict'))
+fs.write_all(vim.fs.joinpath(package_root, 'dict', 'te.json'), '{"test":{"translation":["测试"]}}')
+fs.save_json(vim.fs.joinpath(package_root, 'manifest.json'), {
+  schema_version = 1,
+  version = '9.9.9',
+  file_count = 1,
+})
+local tar_result = vim.system({ 'tar', '-czf', archive, '-C', package_root, '.' }, { text = true }):wait()
+fs.write_all(checksum, vim.fn.sha256(fs.read_all(archive)) .. '  vv-translate-dict.tar.gz\n')
+fs.save_json(release_metadata, {
+  tag_name = 'dict-v9.9.9',
+  assets = {
+    { name = 'vv-translate-dict.tar.gz', browser_download_url = 'file://' .. archive },
+    { name = 'vv-translate-dict.tar.gz.sha256', browser_download_url = 'file://' .. checksum },
+  },
+})
+fs.mkdir_p(installed)
+fs.write_all(vim.fs.joinpath(installed, 'old.json'), '{}')
+
+local install_result
+DictionaryInstaller.install({
+  metadata_url = 'file://' .. release_metadata,
+  destination = installed,
+}, function(result) install_result = result end)
+local completed = vim.wait(10000, function() return install_result ~= nil end, 20)
+local installed_manifest = completed and fs.load_json(vim.fs.joinpath(installed, 'manifest.json')) or {}
+ok(tar_result.code == 0 and completed and install_result.ok
+  and installed_manifest.version == '9.9.9'
+  and fs.exists(vim.fs.joinpath(installed, 'te.json'))
+  and not fs.exists(vim.fs.joinpath(installed, 'old.json')),
+  '词典安装器真实下载、校验并解压归档后替换旧词典')
+fs.delete(fixture_root)
 
 print(('%d 通过 / %d 失败'):format(pass, fail))
 if fail > 0 then vim.cmd('cquit 1') end
