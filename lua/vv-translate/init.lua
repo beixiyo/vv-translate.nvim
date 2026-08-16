@@ -3,6 +3,8 @@ local Async = require('vv-utils.async')
 local Dictionary = require('vv-translate.dictionary')
 local Identifier = require('vv-translate.identifier')
 local Provider = require('vv-translate.provider')
+local Fallback = require('vv-translate.provider.fallback')
+local Route = require('vv-translate.provider.route')
 local Source = require('vv-translate.source')
 local View = require('vv-translate.view')
 local Highlights = require('vv-translate.view.highlights')
@@ -11,8 +13,22 @@ local M = {}
 local config = {}
 local scope = Async.scope({ cancel_previous = true })
 
+local function default_sentence_route(request)
+  if config.provider ~= 'local' then return nil end
+  if request.text:match('^[%a%d_%-]+$') then return nil end
+
+  if vim.env.GROQ_API_KEY and vim.trim(vim.env.GROQ_API_KEY) ~= '' then
+    return { 'groq', 'mymemory', 'local' }
+  end
+  return { 'mymemory', 'local' }
+end
+
 local defaults = {
   provider = 'local',
+  routes = {
+    selection = default_sentence_route,
+    text = default_sentence_route,
+  },
   providers = {
     ['local'] = {},
   },
@@ -72,18 +88,7 @@ function M.translate_text(text, opts)
     return
   end
 
-  local local_config = config.providers and config.providers['local'] or {}
-  local dictionary_path = local_config.dictionary_path
-    or require('vv-translate.provider.local.dictionary').default_path()
-  if config.provider == 'local' and vim.fn.isdirectory(dictionary_path) ~= 1 then
-    M.download_dictionary(function(result)
-      if result.ok then M.translate_text(text, opts) end
-    end)
-    return
-  end
-
   local query = opts.identifier and Identifier.normalize(text) or text
-  M.close()
   local request_payload = {
     text = query,
     kind = opts.kind or 'text',
@@ -91,12 +96,66 @@ function M.translate_text(text, opts)
     target_language = opts.target_language,
     metadata = opts.metadata,
   }
+  local provider_names, route_error = Route.resolve(request_payload, {
+    routes = config.routes,
+    fallback = config.provider,
+    override = opts.provider,
+  })
+
+  M.close()
   View.open(request_payload, function() scope:cancel() end)
+  if route_error then
+    View.error(request_payload, route_error)
+    return
+  end
 
   local request = scope:begin({ key = 'translate', mode = 'latest' })
-  local cancel = Provider.translate(request_payload, {
-    name = config.provider,
-    providers = config.providers,
+  local cancel = Fallback.run({
+    providers = provider_names,
+    run = function(provider_name, callback)
+      local local_config = config.providers and config.providers['local'] or {}
+      local dictionary_path = local_config.dictionary_path
+        or require('vv-translate.provider.local.dictionary').default_path()
+
+      if provider_name == 'local' and vim.fn.isdirectory(dictionary_path) ~= 1 then
+        local installing = true
+        local install_cancel
+        local provider_cancel
+        local cancelled = false
+
+        install_cancel = M.download_dictionary(function(result)
+          installing = false
+          if cancelled then return end
+          if result.ok then
+            provider_cancel = Provider.translate(request_payload, {
+              name = provider_name,
+              providers = config.providers,
+            }, callback)
+          else
+            callback({
+              code = result.code or 'dictionary_install_failed',
+              message = result.message or 'Failed to install the offline dictionary',
+              provider = 'local',
+            }, nil)
+          end
+        end)
+
+        return function()
+          if cancelled then return end
+          cancelled = true
+          if installing and install_cancel then
+            install_cancel()
+          elseif provider_cancel then
+            provider_cancel()
+          end
+        end
+      end
+
+      return Provider.translate(request_payload, {
+        name = provider_name,
+        providers = config.providers,
+      }, callback)
+    end,
   }, function(err, result)
     if not request:finish() then return end
     if err then
@@ -164,7 +223,8 @@ end
 return M
 
 ---@class VVTranslateConfig
----@field provider? string 当前 provider 名称 @default 'local'
+---@field provider? VVTranslateProviderSelection 默认 provider 或 fallback 顺序 @default 'local'
+---@field routes? table<'word'|'selection'|'text', VVTranslateProviderSelection|fun(request: VVTranslateRequest): VVTranslateProviderSelection?> 按请求来源选择 provider 或 fallback 顺序
 ---@field providers? table<string, VVTranslateProviderConfig> provider 配置表
 ---@field highlights? VVTranslateHighlightConfig 语义高亮覆盖；默认链接当前主题
 ---@field view? VVTranslateViewConfig 浮窗配置
@@ -175,6 +235,7 @@ return M
 ---@field source_language? string 源语言；provider 可选择是否使用
 ---@field target_language? string 目标语言；provider 可选择是否使用
 ---@field metadata? table 调用方透传元数据
+---@field provider? VVTranslateProviderSelection 单次调用显式指定 provider 或 fallback 顺序
 
 ---@class VVTranslateProviderOptions
 ---@field name string 当前 provider 名称

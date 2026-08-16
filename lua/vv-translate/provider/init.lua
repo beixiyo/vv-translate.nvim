@@ -4,7 +4,9 @@ local Callback = require('vv-utils.callback')
 local Presentation = require('vv-translate.presentation')
 
 local BUILTIN = {
+  ['groq'] = function() return require('vv-translate.provider.groq') end,
   ['local'] = function() return require('vv-translate.provider.local') end,
+  ['mymemory'] = function() return require('vv-translate.provider.mymemory') end,
 }
 
 local function error_result(code, message, provider, cause)

@@ -3,7 +3,7 @@ local Loading = require('vv-utils.loading')
 
 local M = {}
 
----在浮窗第一行启动 loading 动画
+---在浮窗最后一行启动 loading 动画；默认 renderer 为其保留独立空行
 ---@param state table
 ---@param config VVTranslateViewConfig
 ---@return fun() stop
@@ -14,7 +14,9 @@ function M.start(state, config)
   return Loading.start({
     buf = state.buf,
     get_row = function()
-      return state.buf and vim.api.nvim_buf_is_valid(state.buf) and 1 or nil
+      return state.buf and vim.api.nvim_buf_is_valid(state.buf)
+        and vim.api.nvim_buf_line_count(state.buf)
+        or nil
     end,
     frames = frames,
     interval_ms = opts.interval_ms,

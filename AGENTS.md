@@ -6,7 +6,11 @@
 - `identifier.lua` 只负责代码标识符规范化，不决定何时翻译
 - `provider/init.lua` 只负责 provider 解析、调用和统一结果/错误边界
 - `provider/local/` 按加载、格式化和翻译策略拆分内置离线 provider
+- `provider/route.lua` 按请求来源选择 provider，不硬编码具体云服务
+- `provider/groq/` 与 `provider/mymemory/` 只负责各自协议、响应解析和展示转换
+- `vv-utils.http` 提供非流式 HTTP 机制，不决定 provider 策略
 - `presentation/` 定义 provider presenter 与 view renderer 共享的内容契约
+- `presentation/bilingual.lua` 统一云端翻译的原文、译文和语义高亮布局
 - `view/` 按浮窗生命周期、loading、输入转发、通用默认 renderer、buffer 渲染和语义高亮拆分，不发起翻译
 - `init.lua` 组合策略，并负责取消过期请求
 

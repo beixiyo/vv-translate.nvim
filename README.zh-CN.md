@@ -21,6 +21,7 @@
 
 - Neovim 0.12+
 - [vv-utils.nvim](https://github.com/beixiyo/vv-utils.nvim)
+- `curl`（Windows 使用系统自带的 `curl.exe`）
 
 ## 安装
 
@@ -90,11 +91,7 @@ require('vv-translate').setup({
 
 首次翻译时，如果本地没有词典，插件会自动下载最新 Release，校验 SHA-256 与 manifest，再安装到 `<plugin-root>/dict` 并继续刚才的翻译。之后内置 `local` provider 翻译时不依赖 `translate-shell` 或任何网络服务。插件启动时不会检查更新；需要更新或重新安装时可手动执行 `:VVTranslateDownloadDictionary`
 
-语义高亮默认链接到 Neovim 标准高亮组，因此会跟随当前 colorscheme，并在执行 `:colorscheme` 后自动恢复。`highlights` 下的每一项都接受普通的 `nvim_set_hl()` spec；覆盖某项时会完整替换该语义的默认链接
-
 浮窗打开期间，其控制键会临时接管来源 buffer：Normal 或 Visual 模式下使用 `<C-e>`、`<C-y>` 滚动翻译内容，使用 `q`、`<Esc>` 关闭浮窗。关闭后会恢复原有 buffer-local 映射
-
-Loading 使用 `vv-utils.loading` 在查询文本旁显示动画，并在结果、错误或关闭时停止。Loading 和成功结果默认不显示标题，错误状态保留居中的标题；provider presenter 或自定义 renderer 可以在标题确实有信息价值时设置 `content.title`
 
 ## 使用
 
@@ -103,6 +100,69 @@ Loading 使用 `vv-utils.loading` 在查询文本旁显示动画，并在结果�
 - `:VVTranslateVisual` 翻译当前或最近一次 Visual 选区
 - `:VVTranslateClose` 关闭浮窗并取消当前请求
 - `:VVTranslateDownloadDictionary` 下载并安装最新版离线词典
+
+## 句子翻译
+
+默认情况下，单个英文单词或代码标识符使用本地词典；Visual 自然语言选区和直接文本请求在存在 `GROQ_API_KEY` 时优先使用 Groq，否则使用 MyMemory；API 错误或超时后最终回退到本地词典：
+
+```text
+单词 / getUserProfile → local
+句子且存在 key       → groq → mymemory → local
+句子且没有 key       → mymemory → local
+```
+
+默认无需配置 routes。需要调整顺序或根据内容自定义策略时再覆盖：
+
+```lua
+local sentence_providers = vim.env.GROQ_API_KEY
+  and { 'groq', 'mymemory' }
+  or { 'mymemory' }
+
+require('vv-translate').setup({
+  provider = 'local',
+  routes = {
+    word = 'local',
+    selection = sentence_providers,
+    text = function(request)
+      if #request.text > 500 then return { 'groq' } end
+      return sentence_providers
+    end,
+  },
+  providers = {
+    ['local'] = {},
+    groq = {
+      -- api_key = function() return vim.env.GROQ_API_KEY end,
+      -- model = 'qwen/qwen3.6-27b',
+      -- target_language = 'Simplified Chinese',
+    },
+    mymemory = {
+      -- email = function() return vim.env.MYMEMORY_EMAIL end,
+      -- source_language = 'en',
+      -- target_language = 'zh-CN',
+    },
+  },
+})
+```
+
+在 [Groq Console](https://console.groq.com/keys) 免费创建 key，然后在启动 Neovim 前设置环境变量：
+
+```sh
+export GROQ_API_KEY='gsk_...'
+```
+
+Groq provider 使用非流式 Chat Completions 请求，默认读取 `GROQ_API_KEY`。`api_key` 也可以直接传字符串或返回字符串的函数。默认模型为 `qwen/qwen3.6-27b`，默认目标语言为简体中文
+
+MyMemory 无需 key 即可匿名使用，官方额度为每天 5000 字符、单次最多 500 bytes。设置 `MYMEMORY_EMAIL` 后，官方额度提高到每天 50000 字符。发送给任一云端 provider 的文本都会离开本机，只应在接受这一行为时配置相应路由。详见 [MyMemory API](https://mymemory.translated.net/doc/spec.php) 和[使用限制](https://mymemory.translated.net/doc/usagelimits.php)
+
+每条 route 可以是 provider 名称、按顺序排列的 provider 数组，也可以是接收完整请求并返回上述任一形式的函数
+
+数组中的 provider 返回错误时会从左到右继续尝试；成功或取消会立即停止
+
+顶层 `provider` 同样支持字符串或数组，但只有 route 未匹配或函数返回 `nil` 时才使用，不会把它偷偷追加到显式 route 数组末尾
+
+fallback 成功后，之前的失败摘要保存在 `result.metadata.fallback.attempts`。`translate_text()` 的单次 `provider` 覆盖也支持相同形式
+
+配置数组代表用户明确允许前一个 provider 失败后，把同一段文本继续发送给后续服务；只应加入可以接受其隐私行为的 provider
 
 ## 自定义 provider
 

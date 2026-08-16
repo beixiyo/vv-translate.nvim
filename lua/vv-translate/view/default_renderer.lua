@@ -82,7 +82,7 @@ function M.render(event, context)
   if event == 'loading' then
     local text = context.request.text
     return {
-      lines = { text },
+      lines = { text, '' },
       highlights = { { row = 0, start_col = 0, end_col = #text, role = 'source' } },
     }
   end

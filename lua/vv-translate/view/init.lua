@@ -82,8 +82,7 @@ function M.open(request, on_close)
   window_config.title = ''
 
   state.win = vim.api.nvim_open_win(state.buf, false, window_config)
-  vim.wo[state.win].wrap = config.wrap
-  UIWindow.hide_chrome_until_buf_wiped(state.win, state.buf)
+  UIWindow.hide_chrome_until_buf_wiped(state.win, state.buf, { wrap = config.wrap })
   Render.set_content(state, config, content_for('loading', { request = request }))
   state.stop_loading = Loading.start(state, config)
   state.keymaps = Input.attach(state, config, function() M.close(true) end)

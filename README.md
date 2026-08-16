@@ -21,6 +21,7 @@ Offline-first translation for code identifiers and visual selections in Neovim
 
 - Neovim 0.12+
 - [vv-utils.nvim](https://github.com/beixiyo/vv-utils.nvim)
+- `curl` (`curl.exe` on Windows)
 
 ## Installation
 
@@ -90,11 +91,7 @@ require('vv-translate').setup({
 
 On the first translation, a missing dictionary is downloaded automatically from the latest Release, verified with its SHA-256 checksum and manifest, and installed to `<plugin-root>/dict`. The built-in `local` provider does not require `translate-shell` or any network service after that. No update check runs at startup; use `:VVTranslateDownloadDictionary` whenever you want to update or reinstall it manually.
 
-Semantic highlights link to standard Neovim highlight groups by default, so they follow the active colorscheme and are restored after `:colorscheme` changes. Each entry under `highlights` accepts a normal `nvim_set_hl()` specification; an override replaces that semantic role's default link.
-
 While the floating window is open, its controls temporarily take precedence in the source buffer: `<C-e>` and `<C-y>` scroll the translation, while `q` and `<Esc>` close it in Normal or Visual mode. Previous buffer-local mappings are restored when the window closes.
-
-Loading uses `vv-utils.loading` to animate beside the query and is stopped when a result, error, or close event occurs. Loading and successful results have no title by default; errors keep a centered status title. Provider presenters and custom renderers may set `content.title` when a title carries useful information.
 
 ## Usage
 
@@ -103,6 +100,63 @@ Loading uses `vv-utils.loading` to animate beside the query and is stopped when 
 - `:VVTranslateVisual` translates the current or most recent Visual selection
 - `:VVTranslateClose` closes the floating window and cancels the current request
 - `:VVTranslateDownloadDictionary` downloads and installs the latest offline dictionary
+
+## Sentence translation
+
+By default, a single English word or code identifier uses the local dictionary. Natural-language selections and direct text requests use Groq when `GROQ_API_KEY` is available, otherwise MyMemory, and finally fall back to the local dictionary after API errors or timeouts:
+
+```text
+word / getUserProfile  -> local
+sentence with key      -> groq -> mymemory -> local
+sentence without key   -> mymemory -> local
+```
+
+No routing configuration is required. Override the defaults when you want a different order or content-aware policy:
+
+```lua
+local sentence_providers = vim.env.GROQ_API_KEY
+  and { 'groq', 'mymemory' }
+  or { 'mymemory' }
+
+require('vv-translate').setup({
+  provider = 'local',
+  routes = {
+    word = 'local',
+    selection = sentence_providers,
+    text = function(request)
+      if #request.text > 500 then return { 'groq' } end
+      return sentence_providers
+    end,
+  },
+  providers = {
+    ['local'] = {},
+    groq = {
+      -- api_key = function() return vim.env.GROQ_API_KEY end,
+      -- model = 'qwen/qwen3.6-27b',
+      -- target_language = 'Simplified Chinese',
+    },
+    mymemory = {
+      -- email = function() return vim.env.MYMEMORY_EMAIL end,
+      -- source_language = 'en',
+      -- target_language = 'zh-CN',
+    },
+  },
+})
+```
+
+Create a free Groq key at [Groq Console](https://console.groq.com/keys), then expose it before starting Neovim:
+
+```sh
+export GROQ_API_KEY='gsk_...'
+```
+
+The Groq provider uses a non-streaming Chat Completions request and reads `GROQ_API_KEY` by default. `api_key` may also be a string or a function. The default model is `qwen/qwen3.6-27b` and the default target is Simplified Chinese.
+
+MyMemory works anonymously without a key. Its official limit is 5,000 characters per day and 500 bytes per request. Setting `MYMEMORY_EMAIL` raises the documented daily limit to 50,000 characters. Text sent to either cloud provider leaves the local machine; configure a route only when that is acceptable. See the [MyMemory API specification](https://mymemory.translated.net/doc/spec.php) and [usage limits](https://mymemory.translated.net/doc/usagelimits.php).
+
+Each route accepts a provider name, an ordered provider array, or a function receiving the complete request and returning either form. Arrays are tried from left to right whenever a provider returns an error; success and cancellation stop the chain. The top-level `provider` accepts a string or array and is used only when no route matches or a route function returns `nil`—it is not appended to an explicit route array. A successful fallback records prior failures in `result.metadata.fallback.attempts`. `translate_text()` accepts the same forms as a one-off `provider` override.
+
+An ordered array explicitly authorizes sending the same text to later services after an earlier failure. Use only providers whose privacy behavior you accept.
 
 ## Custom providers
 

@@ -26,9 +26,17 @@ local function buffer_virt_text(buf)
   return table.concat(values)
 end
 
+local function buffer_virt_text_row(buf)
+  for _, mark in ipairs(vim.api.nvim_buf_get_extmarks(buf, -1, 0, -1, { details = true })) do
+    if mark[4].virt_text then return mark[2] end
+  end
+end
+
 local Identifier = require('vv-translate.identifier')
 local Source = require('vv-translate.source')
 local Provider = require('vv-translate.provider')
+local Fallback = require('vv-translate.provider.fallback')
+local Route = require('vv-translate.provider.route')
 local Translate = require('vv-translate')
 local DictionaryInstaller = require('vv-translate.dictionary.installer')
 local fs = require('vv-utils.fs')
@@ -200,12 +208,16 @@ Translate.setup({
     },
   },
 })
-Translate.translate_text('waiting')
+Translate.translate_text('a long sentence that exceeds a compact translation window while waiting')
 local _, loading_buf = require('vv-translate.view').current()
-local loading_started = loading_buf and buffer_virt_text(loading_buf) ~= ''
+local loading_lines = loading_buf and vim.api.nvim_buf_get_lines(loading_buf, 0, -1, false) or {}
+local loading_started = loading_buf
+  and buffer_virt_text(loading_buf) ~= ''
+  and buffer_virt_text_row(loading_buf) == 1
+  and loading_lines[2] == ''
 loading_callback(nil, { text = 'done' })
 ok(loading_started and buffer_virt_text(loading_buf) == '',
-  'loading 在等待期间显示并在请求完成后清理')
+  'loading 在长句下方独立显示并在请求完成后清理')
 Translate.close()
 
 Translate.translate_text('close loading')
@@ -263,6 +275,8 @@ Translate.translate_text('scroll')
 local scroll_win = require('vv-translate.view').current()
 local scroll_down = buffer_map(source_buf, 'n', '<C-e>')
 local scroll_up = buffer_map(source_buf, 'n', '<C-y>')
+ok(vim.api.nvim_get_option_value('wrap', { win = scroll_win }),
+  '翻译浮窗默认自动换行')
 local first_topline = vim.api.nvim_win_call(scroll_win, function() return vim.fn.line('w0') end)
 scroll_down.callback()
 local second_topline = vim.api.nvim_win_call(scroll_win, function() return vim.fn.line('w0') end)
@@ -308,6 +322,112 @@ local provider_errors_correct = provider_error_code('missing') == 'provider_not_
     present = function() error('boom') end,
   }) == 'provider_presenter_failed'
 ok(provider_errors_correct, 'provider 路由将关键失败归一化为稳定错误码')
+
+local routed_providers = Route.resolve({ text = 'sentence', kind = 'selection' }, {
+  routes = {
+    selection = function(request)
+      return request.text == 'sentence' and { 'groq', 'mymemory' } or 'local'
+    end,
+  },
+  fallback = 'local',
+})
+local default_providers = Route.resolve({ text = 'sentence', kind = 'text' }, {
+  routes = {},
+  fallback = { 'groq', 'mymemory' },
+})
+ok(vim.deep_equal(routed_providers, { 'groq', 'mymemory' })
+  and vim.deep_equal(default_providers, { 'groq', 'mymemory' }),
+  'provider route 和顶层默认值都可以声明 fallback 顺序')
+
+local original_groq_key = vim.env.GROQ_API_KEY
+vim.env.GROQ_API_KEY = nil
+Translate.setup()
+local default_sentence_route = Translate.get_config().routes.selection
+local anonymous_sentence = default_sentence_route({ text = 'hello world', kind = 'selection' })
+local identifier_route = default_sentence_route({ text = 'getUserProfile', kind = 'selection' })
+vim.env.GROQ_API_KEY = 'test-key'
+local keyed_sentence = default_sentence_route({ text = 'hello world', kind = 'selection' })
+vim.env.GROQ_API_KEY = original_groq_key
+ok(vim.deep_equal(anonymous_sentence, { 'mymemory', 'local' })
+  and identifier_route == nil
+  and vim.deep_equal(keyed_sentence, { 'groq', 'mymemory', 'local' }),
+  '默认路由让标识符走本地、自然语言句子按可用 API 顺序回退到本地')
+
+local fallback_order = {}
+local fallback_result
+Fallback.run({
+  providers = { 'groq', 'mymemory' },
+  run = function(provider, callback)
+    fallback_order[#fallback_order + 1] = provider
+    if provider == 'groq' then
+      callback({ code = 'request_failed', message = 'Groq failed', provider = provider })
+    else
+      callback(nil, { provider = provider, text = 'fallback result' })
+    end
+    return function() end
+  end,
+}, function(err, result) fallback_result = not err and result end)
+ok(vim.deep_equal(fallback_order, { 'groq', 'mymemory' })
+  and fallback_result
+  and fallback_result.provider == 'mymemory'
+  and fallback_result.metadata.fallback.attempts[1].provider == 'groq',
+  'provider fallback 在失败后按声明顺序尝试并保留失败摘要')
+
+local Http = require('vv-utils.http')
+local original_http_request = Http.request
+local cloud_requests = {}
+Http.request = function(opts, callback)
+  cloud_requests[#cloud_requests + 1] = opts
+  if opts.url:match('groq') then
+    callback(nil, {
+      status = 200,
+      body = vim.json.encode({ choices = { { message = { content = '云端翻译' } } } }),
+    })
+  else
+    callback(nil, {
+      status = 200,
+      body = vim.json.encode({
+        responseStatus = 200,
+        responseData = { translatedText = '临时翻译' },
+      }),
+    })
+  end
+  return function() end
+end
+
+local groq_result
+Provider.translate({ text = 'cloud sentence', kind = 'text', target_language = 'Chinese' }, {
+  name = 'groq',
+  providers = { groq = { api_key = 'test-key' } },
+}, function(err, result) groq_result = not err and result end)
+local groq_payload = vim.json.decode(cloud_requests[1].body)
+ok(groq_result and groq_result.text == '云端翻译'
+  and vim.deep_equal(groq_result.content.lines, { 'cloud sentence', '', '云端翻译' })
+  and groq_result.content.highlights[1].role == 'source'
+  and groq_result.content.highlights[2].role == 'translation'
+  and groq_payload.stream == false
+  and groq_payload.messages[1].content:match('Chinese'),
+  'Groq provider 解析非流式响应并按语义展示原文和译文')
+
+local mymemory_result
+Provider.translate({ text = 'temporary sentence', kind = 'text' }, {
+  name = 'mymemory',
+  providers = {
+    mymemory = {
+      endpoint = 'https://api.mymemory.translated.net/get?client=test',
+      email = 'test+vv@example.com',
+    },
+  },
+}, function(err, result) mymemory_result = not err and result end)
+ok(mymemory_result and mymemory_result.text == '临时翻译'
+  and vim.deep_equal(mymemory_result.content.lines, { 'temporary sentence', '', '临时翻译' })
+  and cloud_requests[2].url:match('client=test')
+  and cloud_requests[2].url:match('q=temporary%%20sentence')
+  and cloud_requests[2].url:match('langpair=en%%7Czh%-CN'),
+  'MyMemory provider 无需 key 即可翻译并保留原文')
+ok(cloud_requests[2].url:match('de=test%%2Bvv%%40example.com'),
+  'MyMemory 查询参数复用公共 URL 编码并保留 endpoint 已有 query')
+Http.request = original_http_request
 
 local fixture_root = vim.fn.tempname() .. '-vv-translate-test'
 local package_root = vim.fs.joinpath(fixture_root, 'package')
