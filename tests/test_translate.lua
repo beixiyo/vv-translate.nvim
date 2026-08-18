@@ -293,6 +293,16 @@ ok(require('vv-translate.view').current() == nil
   and restored_q and restored_q.callback == previous_q,
   'Visual 模式 q 关闭浮窗并恢复原 buffer 映射')
 
+Translate.translate_text('closed externally')
+local external_close_win, external_close_buf = require('vv-translate.view').current()
+vim.api.nvim_win_close(external_close_win, true)
+vim.wait(100, function() return require('vv-translate.view').current() == nil end)
+ok(require('vv-translate.view').current() == nil
+  and not vim.api.nvim_buf_is_valid(external_close_buf)
+  and not buffer_map(source_buf, 'n', '<C-e>')
+  and not buffer_map(source_buf, 'n', '<C-y>'),
+  '浮窗被外部关闭时归还滚动映射')
+
 vim.cmd('normal! <Esc>')
 Translate.translate_text('escape')
 vim.cmd('normal! v')

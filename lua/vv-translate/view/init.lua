@@ -94,6 +94,12 @@ function M.open(request, on_close)
     once = true,
     callback = function() M.close(true) end,
   })
+  vim.api.nvim_create_autocmd('WinClosed', {
+    group = state.group,
+    pattern = tostring(state.win),
+    once = true,
+    callback = function() M.close(true) end,
+  })
 end
 
 ---显示翻译结果
