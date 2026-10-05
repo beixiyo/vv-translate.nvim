@@ -2,6 +2,7 @@
 local Render = require('vv-translate.view.render')
 local DefaultRenderer = require('vv-translate.view.default_renderer')
 local Input = require('vv-translate.view.input')
+local Layout = require('vv-translate.view.layout')
 local Loading = require('vv-translate.view.loading')
 local Presentation = require('vv-translate.presentation')
 local UIWindow = require('vv-utils.ui_window')
@@ -16,6 +17,8 @@ local state = {
   stop_loading = nil,
   source_buf = nil,
   on_close = nil,
+  -- 最近一次结果或错误内容；VimResized 时按它重新排版，loading 期间为 nil
+  content = nil,
 }
 
 local function valid_buf()
@@ -26,9 +29,13 @@ local function valid_win()
   return state.win and vim.api.nvim_win_is_valid(state.win)
 end
 
----初始化浮窗配置
+---初始化浮窗配置；opts 必须已在 setup 边界合并默认值，非法 layout/hints 直接抛错
 ---@param opts VVTranslateViewConfig
 function M.setup(opts)
+  Layout.validate(opts.layout)
+  if type(opts.hints) ~= 'boolean' then
+    error(('vv-translate: view.hints must be a boolean, got %s'):format(vim.inspect(opts.hints)), 0)
+  end
   config = opts
 end
 
@@ -83,8 +90,8 @@ function M.open(request, on_close)
 
   state.win = vim.api.nvim_open_win(state.buf, false, window_config)
   UIWindow.hide_chrome_until_buf_wiped(state.win, state.buf, { wrap = config.wrap })
-  Render.set_content(state, config, content_for('loading', { request = request }))
-  state.stop_loading = Loading.start(state, config)
+  local layout = Render.set_content(state, config, content_for('loading', { request = request }))
+  state.stop_loading = Loading.start(state, config, { truncated = layout.truncated })
   state.keymaps = Input.attach(state, config, function() M.close(true) end)
 
   state.group = vim.api.nvim_create_augroup('VVTranslateView', { clear = true })
@@ -93,6 +100,14 @@ function M.open(request, on_close)
     buffer = state.source_buf,
     once = true,
     callback = function() M.close(true) end,
+  })
+  vim.api.nvim_create_autocmd('VimResized', {
+    group = state.group,
+    callback = function()
+      -- loading 期间内容是临时原文且 footer 可能被帧占用，等结果到达时再按新尺寸排版
+      if state.stop_loading or not state.content then return end
+      Render.set_content(state, config, state.content)
+    end,
   })
   vim.api.nvim_create_autocmd('WinClosed', {
     group = state.group,
@@ -107,7 +122,8 @@ end
 ---@param result VVTranslateResult
 function M.result(request, result)
   stop_loading()
-  Render.set_content(state, config, content_for('result', { request = request, result = result }))
+  state.content = content_for('result', { request = request, result = result })
+  Render.set_content(state, config, state.content)
 end
 
 ---显示可行动错误
@@ -115,7 +131,8 @@ end
 ---@param error VVTranslateError
 function M.error(request, error)
   stop_loading()
-  Render.set_content(state, config, content_for('error', { request = request, error = error }))
+  state.content = content_for('error', { request = request, error = error })
+  Render.set_content(state, config, state.content)
 end
 
 ---关闭浮窗
@@ -131,6 +148,7 @@ function M.close(notify_owner)
   if valid_buf() then pcall(vim.api.nvim_buf_delete, state.buf, { force = true }) end
 
   state.buf, state.win, state.group, state.keymaps, state.source_buf = nil, nil, nil, nil, nil
+  state.content = nil
   if on_close then on_close() end
 end
 

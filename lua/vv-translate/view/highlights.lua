@@ -5,6 +5,7 @@ local M = {}
 
 local groups = {
   source = 'VVTranslateSource',
+  source_muted = 'VVTranslateSourceMuted',
   phonetic = 'VVTranslatePhonetic',
   part_of_speech = 'VVTranslatePartOfSpeech',
   translation = 'VVTranslateTranslation',
@@ -14,6 +15,7 @@ local groups = {
 
 local defaults = {
   source = { link = 'Title' },
+  source_muted = { link = 'Comment' },
   phonetic = { link = 'Comment' },
   part_of_speech = { link = 'Type' },
   translation = { link = 'NormalFloat' },

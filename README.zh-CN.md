@@ -55,6 +55,7 @@ require('vv-translate').setup({
   },
   highlights = {
     -- source = { link = 'Title' },
+    -- source_muted = { link = 'Comment' },
     -- phonetic = { link = 'Comment' },
     -- part_of_speech = { link = 'Type' },
     -- translation = { link = 'NormalFloat' },
@@ -65,6 +66,14 @@ require('vv-translate').setup({
     max_width = 72,
     max_height = 16,
     wrap = true,
+    hints = false,
+    layout = {
+      mode = 'auto', -- auto | stack | split
+      min_column_width = 40,
+      max_column_width = 80,
+      separator = ' │ ',
+      narrow = 'translation_first', -- translation_first | source_first | translation_only
+    },
     keymaps = {
       close = { 'q', '<Esc>' },
       scroll_down = '<C-e>',
@@ -91,7 +100,19 @@ require('vv-translate').setup({
 
 首次翻译时，如果本地没有词典，插件会自动下载最新 Release，校验 SHA-256 与 manifest，再安装到 `<plugin-root>/dict` 并继续刚才的翻译。之后内置 `local` provider 翻译时不依赖 `translate-shell` 或任何网络服务。插件启动时不会检查更新；需要更新或重新安装时可手动执行 `:VVTranslateDownloadDictionary`
 
-浮窗打开期间，其控制键会临时接管来源 buffer：Normal 或 Visual 模式下使用 `<C-e>`、`<C-y>` 滚动翻译内容，使用 `q`、`<Esc>` 关闭浮窗。关闭后会恢复原有 buffer-local 映射
+浮窗打开期间，其控制键会临时接管来源 buffer：Normal 或 Visual 模式下使用 `<C-e>`、`<C-y>` 滚动翻译内容，使用 `q`、`<Esc>` 关闭浮窗。关闭后会恢复原有 buffer-local 映射。设置 `view.hints = true` 可在浮窗底部边框显示这些按键（取自 `view.keymaps`）；loading 帧占用边框期间暂时让位
+
+### 长双语排版
+
+云端翻译（Groq、MyMemory）会分别携带原文和译文分段，长结果按屏幕宽度自动排版：
+
+- 单栏能在 `max_height` 内放下时保持原样：原文在上、译文在下
+- `mode = 'auto'` 时，若编辑器宽度足以容纳两栏且每栏不小于 `min_column_width`，并且双栏更矮，浮窗改为左原文、右译文，逐行对照、不自动换行，每栏最宽 `max_column_width`
+- 其余情况按 `narrow` 单栏排列：`translation_first` 译文在上、原文在下并使用弱化高亮 `VVTranslateSourceMuted`；`source_first` 保持原顺序；`translation_only` 只显示译文
+- `mode = 'split'` 始终双栏，`mode = 'stack'` 始终单栏
+- `VimResized` 后按最新结果或错误重新排版；loading 期间不重排
+
+离线 `local` 词典和不带 `sections` 的自定义内容始终单栏。单栏高度按真实窗口折行计算，长段中文不再少算行数
 
 ## 使用
 
@@ -207,7 +228,7 @@ require('vv-translate').setup({
 
 请求包含 `text`、`kind`，以及可选的 `source_language`、`target_language` 和 `metadata`。错误使用 `{ code, message, provider?, cause? }`；其中 `message` 必须是可直接展示给用户的英文信息
 
-`present(result, context)` 是可选函数，用于把 provider 私有 `data` 转换为通用的 `{ title?, lines, highlights? }` 内容。没有 presenter 时，默认 renderer 会依次使用 `content`、`text`，最后把任意 `data` 渲染为可读的嵌套键值列表。其他 provider 私有字段会原样保留在 `result` 上，供自定义 renderer 使用
+`present(result, context)` 是可选函数，用于把 provider 私有 `data` 转换为通用的 `{ title?, lines, highlights?, sections? }` 内容。可选的 `sections = { source, translation }` 用于启用长双语排版，`lines` 与 `highlights` 仍是单栏回退。没有 presenter 时，默认 renderer 会依次使用 `content`、`text`，最后把任意 `data` 渲染为可读的嵌套键值列表。其他 provider 私有字段会原样保留在 `result` 上，供自定义 renderer 使用
 
 ## 自定义渲染
 
@@ -238,3 +259,13 @@ Provider 自己负责鉴权、网络传输、重试、响应解析和私有数�
 ## 许可证
 
 [MIT](LICENSE)
+
+## 开发测试
+
+```sh
+./tests/run.sh [literal-filter]
+```
+
+要求 Neovim 0.12+、Git、POSIX shell 与已有 vv-utils 源码（开发 vendors、lazy 或 native pack；`VV_UTILS` 可覆盖发现）。`NVIM_BIN` 可选择 Neovim。词典安装夹具还要求 `tar` 和 `curl`；仅安装本地 `file://` 归档，不操作用户词典。HTTP provider 测试替换传输边界，不需要 API key 或网络。
+
+依赖发现、显式覆盖、隔离与 CI 检出要求见[共享测试入口](https://github.com/beixiyo/vv-utils.nvim/blob/main/dev/test/README.zh-CN.md)。headless 不替代真实 TUI 验证。

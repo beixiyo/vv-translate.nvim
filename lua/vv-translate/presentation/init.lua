@@ -13,6 +13,12 @@ function M.valid(content)
   end
 
   if content.highlights ~= nil and type(content.highlights) ~= 'table' then return false end
+
+  local sections = content.sections
+  if sections ~= nil then
+    if type(sections) ~= 'table' then return false end
+    if type(sections.source) ~= 'string' or type(sections.translation) ~= 'string' then return false end
+  end
   return true
 end
 

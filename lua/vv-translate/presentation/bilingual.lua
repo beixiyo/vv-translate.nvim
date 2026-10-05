@@ -16,17 +16,39 @@ local function append(lines, highlights, text, role)
   end
 end
 
----渲染原文、分隔空行和译文
+---按顺序上下排列文本块，块之间插入一个空行；每块按 '\n' 拆行并整行标注语义
+---@param blocks VVTranslateBilingualBlock[]
+---@return string[] lines
+---@return VVTranslateContentHighlight[] highlights
+function M.stack(blocks)
+  local lines = {}
+  local highlights = {}
+  for index, block in ipairs(blocks) do
+    if index > 1 then lines[#lines + 1] = '' end
+    append(lines, highlights, block.text, block.role)
+  end
+  return lines, highlights
+end
+
+---渲染原文、分隔空行和译文；同时附带原始分段，供浮窗在长内容时改用双栏对照
+---lines/highlights 是单栏回退布局，不依赖 sections 的 renderer 行为不变
 ---@param source string
 ---@param translation string
 ---@return VVTranslateContent
 function M.render(source, translation)
-  local lines = {}
-  local highlights = {}
-  append(lines, highlights, source, 'source')
-  lines[#lines + 1] = ''
-  append(lines, highlights, translation, 'translation')
-  return { lines = lines, highlights = highlights }
+  local lines, highlights = M.stack({
+    { text = source, role = 'source' },
+    { text = translation, role = 'translation' },
+  })
+  return {
+    lines = lines,
+    highlights = highlights,
+    sections = { source = source, translation = translation },
+  }
 end
 
 return M
+
+---@class VVTranslateBilingualBlock
+---@field text string 可含 '\n' 的文本
+---@field role VVTranslateHighlightRole 整块文字的语义

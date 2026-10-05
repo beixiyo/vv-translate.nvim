@@ -37,6 +37,14 @@ local defaults = {
     max_width = 72,
     max_height = 16,
     wrap = true,
+    hints = false,
+    layout = {
+      mode = 'auto',
+      min_column_width = 40,
+      max_column_width = 80,
+      separator = ' │ ',
+      narrow = 'translation_first',
+    },
     keymaps = {
       close = { 'q', '<Esc>' },
       scroll_down = '<C-e>',
@@ -271,7 +279,7 @@ return M
 ---@field provider? string
 ---@field cause? any 仅供诊断，不直接展示
 
----@alias VVTranslateHighlightRole 'source'|'phonetic'|'part_of_speech'|'translation'|'missing'|'error'
+---@alias VVTranslateHighlightRole 'source'|'source_muted'|'phonetic'|'part_of_speech'|'translation'|'missing'|'error'
 
 ---@class VVTranslateContentHighlight
 ---@field row integer 从 0 开始的行号
@@ -283,6 +291,11 @@ return M
 ---@field title? string 浮窗标题
 ---@field lines string[]
 ---@field highlights? VVTranslateContentHighlight[]
+---@field sections? VVTranslateContentSections 原文/译文分段；提供时浮窗可按 view.layout 改用双栏，lines/highlights 作为单栏回退
+
+---@class VVTranslateContentSections
+---@field source string 原文，按 '\n' 拆成段并与译文逐段对齐
+---@field translation string 译文，段数与原文不同时缺的段视为空
 
 ---@class VVTranslatePresentContext
 ---@field request VVTranslateRequest
@@ -298,6 +311,7 @@ return M
 
 ---@class VVTranslateHighlightConfig
 ---@field source? vim.api.keyset.highlight 查询词 @default link Title
+---@field source_muted? vim.api.keyset.highlight 窄屏译文在上时弱化显示的原文 @default link Comment
 ---@field phonetic? vim.api.keyset.highlight 音标 @default link Comment
 ---@field part_of_speech? vim.api.keyset.highlight 词性 @default link Type
 ---@field translation? vim.api.keyset.highlight 释义 @default link NormalFloat
@@ -307,11 +321,20 @@ return M
 ---@class VVTranslateViewConfig
 ---@field max_width? integer 最大宽度；默认 72
 ---@field max_height? integer 最大高度；默认 16
----@field wrap? boolean 是否换行 @default true
+---@field wrap? boolean 单栏时是否换行；双栏已预先折行，固定不换行 @default true
+---@field hints? boolean 在浮窗底部边框显示关闭/滚动按键提示，键取自 keymaps；loading 帧占用 footer 时暂时让位 @default false
+---@field layout? VVTranslateViewLayoutConfig 带原文/译文分段的长内容排版
 ---@field keymaps? VVTranslateViewKeymaps 来源 buffer 的临时浮窗控制键
 ---@field loading? VVTranslateLoadingConfig loading 动画配置
 ---@field window? vim.api.keyset.win_config 不含动态计算的 width、height 和 title
 ---@field render? fun(event: VVTranslateViewEvent, context: VVTranslateRenderContext): VVTranslateContent 自定义内容 renderer
+
+---@class VVTranslateViewLayoutConfig
+---@field mode? 'auto'|'stack'|'split' auto 按高度收益自动选择双栏；stack 始终单栏；split 始终双栏 @default 'auto'
+---@field min_column_width? integer auto 时单栏宽度低于此值不用双栏 @default 40
+---@field max_column_width? integer 双栏单栏最大宽度 @default 80
+---@field separator? string 双栏分隔符 @default ' │ '
+---@field narrow? 'translation_first'|'source_first'|'translation_only' 单栏放不下且不适合双栏时的排法；放得下时保持原文在上 @default 'translation_first'
 
 ---@class VVTranslateViewKeymaps
 ---@field close? string[] 关闭浮窗 @default { 'q', '<Esc>' }
@@ -324,5 +347,5 @@ return M
 ---@field interval_ms? integer 帧间隔 @default 80
 ---@field hl? string 高亮组 @default 'VVTranslatePhonetic'
 ---@field prefix? string 帧前缀 @default ' '
----@field virt_text_pos? 'eol'|'inline'|'right_align' @default 'eol'
+---@field virt_text_pos? 'eol'|'inline'|'right_align' 最后一行的帧位置；内容超过 max_height 时帧改在浮窗 footer @default 'eol'
 ---@field hl_mode? 'replace'|'combine'|'blend' @default 'combine'

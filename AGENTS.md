@@ -11,7 +11,8 @@
 - `vv-utils.http` 提供非流式 HTTP 机制，不决定 provider 策略
 - `presentation/` 定义 provider presenter 与 view renderer 共享的内容契约
 - `presentation/bilingual.lua` 统一云端翻译的原文、译文和语义高亮布局
-- `view/` 按浮窗生命周期、loading、输入转发、通用默认 renderer、buffer 渲染和语义高亮拆分，不发起翻译
+- `view/` 按浮窗生命周期、loading、输入转发、通用默认 renderer、排版、buffer 渲染和语义高亮拆分，不发起翻译
+- `view/layout.lua` 只负责把内容排成单栏或双栏（双栏判定与对齐复用 `vv-utils.ui_columns`），不写 buffer、不开窗口
 - `init.lua` 组合策略，并负责取消过期请求
 
 公共配置保持 provider 可替换；第三方云端 provider 通过通用请求、结果和错误对象接入，不得在路由层硬编码服务商策略

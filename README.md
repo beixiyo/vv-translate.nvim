@@ -55,6 +55,7 @@ require('vv-translate').setup({
   },
   highlights = {
     -- source = { link = 'Title' },
+    -- source_muted = { link = 'Comment' },
     -- phonetic = { link = 'Comment' },
     -- part_of_speech = { link = 'Type' },
     -- translation = { link = 'NormalFloat' },
@@ -65,6 +66,14 @@ require('vv-translate').setup({
     max_width = 72,
     max_height = 16,
     wrap = true,
+    hints = false,
+    layout = {
+      mode = 'auto', -- auto | stack | split
+      min_column_width = 40,
+      max_column_width = 80,
+      separator = ' │ ',
+      narrow = 'translation_first', -- translation_first | source_first | translation_only
+    },
     keymaps = {
       close = { 'q', '<Esc>' },
       scroll_down = '<C-e>',
@@ -91,7 +100,19 @@ require('vv-translate').setup({
 
 On the first translation, a missing dictionary is downloaded automatically from the latest Release, verified with its SHA-256 checksum and manifest, and installed to `<plugin-root>/dict`. The built-in `local` provider does not require `translate-shell` or any network service after that. No update check runs at startup; use `:VVTranslateDownloadDictionary` whenever you want to update or reinstall it manually.
 
-While the floating window is open, its controls temporarily take precedence in the source buffer: `<C-e>` and `<C-y>` scroll the translation, while `q` and `<Esc>` close it in Normal or Visual mode. Previous buffer-local mappings are restored when the window closes.
+While the floating window is open, its controls temporarily take precedence in the source buffer: `<C-e>` and `<C-y>` scroll the translation, while `q` and `<Esc>` close it in Normal or Visual mode. Previous buffer-local mappings are restored when the window closes. Set `view.hints = true` to show these keys (taken from `view.keymaps`) in the bottom border; while the loading spinner occupies the border it temporarily takes its place.
+
+### Long bilingual layout
+
+Cloud translations (Groq, MyMemory) carry the source and translation as separate sections, so long results adapt to the screen width:
+
+- If the single-column view fits within `max_height`, the source stays on top and the translation below, exactly as before
+- With `mode = 'auto'`, when the editor is wide enough for two columns of at least `min_column_width` and the side-by-side view is shorter, the window shows the source on the left and the translation on the right. Lines are paired one to one, the window does not soft-wrap, and each column is at most `max_column_width` wide
+- Otherwise the single-column view follows `narrow`: `translation_first` puts the translation on top and the source below with the muted `VVTranslateSourceMuted` highlight, `source_first` keeps the original order, and `translation_only` hides the source
+- `mode = 'split'` always uses two columns and `mode = 'stack'` never does
+- On `VimResized` the current result or error is laid out again; layout during loading is left unchanged
+
+The offline `local` dictionary and custom content without `sections` always use the single-column view. Single-column height is measured from the real window, so wrapped CJK text is no longer cut short.
 
 ## Usage
 
@@ -201,7 +222,7 @@ require('vv-translate').setup({
 
 The request contains `text`, `kind`, and optional `source_language`, `target_language`, and `metadata` fields. Errors use `{ code, message, provider?, cause? }`; `message` must be suitable for display to users.
 
-`present(result, context)` is optional. It converts provider-specific `data` into common `{ title?, lines, highlights? }` content. Without a presenter, the default renderer uses `content`, then `text`, and finally renders arbitrary `data` as a readable nested key-value list. Other provider-specific fields remain available on `result` for a custom renderer.
+`present(result, context)` is optional. It converts provider-specific `data` into common `{ title?, lines, highlights?, sections? }` content. `sections = { source, translation }` is optional and enables the long bilingual layout; `lines` and `highlights` remain the single-column fallback. Without a presenter, the default renderer uses `content`, then `text`, and finally renders arbitrary `data` as a readable nested key-value list. Other provider-specific fields remain available on `result` for a custom renderer.
 
 ## Custom rendering
 
@@ -232,3 +253,13 @@ The downloadable offline dictionary is adapted from the MIT-licensed [w88975/cod
 ## License
 
 [MIT](LICENSE)
+
+## Development tests
+
+```sh
+./tests/run.sh [literal-filter]
+```
+
+Requires Neovim 0.12+, Git, POSIX shell and an existing vv-utils checkout (development vendors, lazy or native pack; `VV_UTILS` overrides discovery). `NVIM_BIN` selects Neovim. Dictionary installation fixtures additionally require `tar` and `curl`; they install local `file://` archives, not a user dictionary. HTTP provider tests replace the transport boundary and need no API keys or network.
+
+Dependency discovery, explicit overrides, isolation and CI checkout requirements: [shared test entry](https://github.com/beixiyo/vv-utils.nvim/blob/main/dev/test/README.md). Headless tests do not replace real TUI validation.
