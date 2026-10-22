@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.3.0 - 2026-10-22
+
+### Changed
+
+- 输入类型统一为 `VVTranslateOpts`，由 `VVTranslateConfig` 派生
+
 ## 0.2.0 - 2026-10-04
 
 ### Added

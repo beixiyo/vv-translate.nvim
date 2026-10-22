@@ -127,7 +127,7 @@ local function stack(lines, highlights, config)
     mode = 'stack',
     lines = lines,
     highlights = role_highlights(highlights),
-    wrap = config.wrap ~= false,
+    wrap = config.wrap,
     width = stack_width(lines, config),
   }
 end

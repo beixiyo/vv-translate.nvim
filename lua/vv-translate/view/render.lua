@@ -16,7 +16,7 @@ end
 ---@return VVKeyHint[]
 local function key_hints(keymaps)
   local hints = {}
-  if keymaps.close and keymaps.close[1] then hints[#hints + 1] = { key = keymaps.close[1], desc = 'close' } end
+  if keymaps.close[1] then hints[#hints + 1] = { key = keymaps.close[1], desc = 'close' } end
   if keymaps.scroll_down then hints[#hints + 1] = { key = keymaps.scroll_down, desc = 'scroll down' } end
   if keymaps.scroll_up then hints[#hints + 1] = { key = keymaps.scroll_up, desc = 'scroll up' } end
   return hints
@@ -26,10 +26,10 @@ end
 ---无边框窗口不支持 footer，set_config 失败视为不显示
 local function set_hints(state, config, width)
   if not config.hints then return end
-  local chunks = UIWindow.key_hints(key_hints(config.keymaps or {}), { max_width = width })
+  local chunks = UIWindow.key_hints(key_hints(config.keymaps), { max_width = width })
   pcall(vim.api.nvim_win_set_config, state.win, {
     footer = chunks or '',
-    footer_pos = (config.window or {}).footer_pos or 'center',
+    footer_pos = config.window.footer_pos or 'center',
   })
 end
 
@@ -54,7 +54,7 @@ function M.set_content(state, config, content)
   vim.bo[state.buf].modifiable = false
   vim.api.nvim_set_option_value('wrap', layout.wrap, { win = state.win, scope = 'local' })
 
-  local window = config.window or {}
+  local window = config.window
   vim.api.nvim_win_set_config(state.win, {
     relative = window.relative or 'cursor',
     row = window.row or 1,
@@ -62,7 +62,7 @@ function M.set_content(state, config, content)
     width = layout.width,
     height = math.min(#layout.lines, config.max_height),
     title = content.title and (' %s '):format(content.title) or '',
-    title_pos = window.title_pos or 'center',
+    title_pos = window.title_pos,
   })
 
   -- 宽度和 wrap 生效后按真实窗口计算屏幕行数：显示宽度估算会漏算宽字符整字换行

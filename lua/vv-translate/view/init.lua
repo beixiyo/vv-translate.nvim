@@ -82,7 +82,7 @@ function M.open(request, on_close)
     zindex = 60,
     title = '',
     title_pos = 'center',
-  }, config.window or {})
+  }, config.window)
 
   window_config.width = 20
   window_config.height = 1

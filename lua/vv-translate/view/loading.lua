@@ -10,12 +10,12 @@ local M = {}
 ---@param opts { truncated: boolean }
 ---@return fun() stop
 function M.start(state, config, opts)
-  local loading = config.loading or {}
+  local loading = config.loading
   local common = {
-    frames = loading.frames or Loading.presets[loading.preset or 'braille'],
+    frames = loading.frames or Loading.presets[loading.preset],
     interval_ms = loading.interval_ms,
   }
-  local hl = loading.hl or 'VVTranslatePhonetic'
+  local hl = loading.hl
 
   local handle
   if opts.truncated then
@@ -31,7 +31,7 @@ function M.start(state, config, opts)
         if not (state.buf and vim.api.nvim_buf_is_valid(state.buf)) then return nil end
         return { row = vim.api.nvim_buf_line_count(state.buf) }
       end,
-      pos = loading.virt_text_pos or 'eol',
+      pos = loading.virt_text_pos,
       hl = hl,
       prefix = loading.prefix,
       hl_mode = loading.hl_mode,

@@ -19,7 +19,7 @@ function M.attach(state, config, close)
   local keymaps = config.keymaps
   local mappings = {}
 
-  for _, lhs in ipairs(keymaps.close or {}) do
+  for _, lhs in ipairs(keymaps.close) do
     local callback = close
     if lhs == '<Esc>' then
       callback = function()

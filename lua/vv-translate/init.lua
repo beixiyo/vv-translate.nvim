@@ -23,6 +23,7 @@ local function default_sentence_route(request)
   return { 'mymemory', 'local' }
 end
 
+---@type VVTranslateConfig
 local defaults = {
   provider = 'local',
   routes = {
@@ -74,7 +75,7 @@ end
 ---@return fun() cancel
 function M.download_dictionary(callback)
   vim.notify('Downloading the latest translation dictionary...')
-  local local_config = config.providers and config.providers['local'] or {}
+  local local_config = config.providers['local']
   return Dictionary.download_latest({ destination = local_config.dictionary_path }, function(result)
     if result.ok then
       vim.notify(('Translation dictionary %s installed'):format(result.version))
@@ -121,7 +122,7 @@ function M.translate_text(text, opts)
   local cancel = Fallback.run({
     providers = provider_names,
     run = function(provider_name, callback)
-      local local_config = config.providers and config.providers['local'] or {}
+      local local_config = config.providers['local']
       local dictionary_path = local_config.dictionary_path
         or require('vv-translate.provider.local.dictionary').default_path()
 
@@ -206,7 +207,7 @@ function M.translate()
 end
 
 ---初始化插件
----@param opts? VVTranslateConfig
+---@param opts? VVTranslateOpts
 function M.setup(opts)
   config = vim.tbl_deep_extend('force', vim.deepcopy(defaults), opts or {})
   Highlights.setup(config.highlights)
@@ -231,11 +232,24 @@ end
 return M
 
 ---@class VVTranslateConfig
----@field provider? VVTranslateProviderSelection 默认 provider 或 fallback 顺序 @default 'local'
----@field routes? table<'word'|'selection'|'text', VVTranslateProviderSelection|fun(request: VVTranslateRequest): VVTranslateProviderSelection?> 按请求来源选择 provider 或 fallback 顺序
----@field providers? table<string, VVTranslateProviderConfig> provider 配置表
----@field highlights? VVTranslateHighlightConfig 语义高亮覆盖；默认链接当前主题
----@field view? VVTranslateViewConfig 浮窗配置
+---@field provider VVTranslateProviderSelection 默认 provider 或 fallback 顺序 @default 'local'
+---@field routes table<'word'|'selection'|'text', VVTranslateProviderSelection|fun(request: VVTranslateRequest): VVTranslateProviderSelection?> 按请求来源选择 provider 或 fallback 顺序 @default { selection = 句子路由, text = 句子路由 }
+---@field providers table<string, VVTranslateProviderConfig> provider 配置表 @default { ['local'] = {} }
+---@field highlights VVTranslateHighlightConfig 语义高亮覆盖；默认链接当前主题 @default {}
+---@field view VVTranslateViewConfig 浮窗配置
+
+-- 输入类型：由 Config 派生，嵌套表各自 partial
+---@class (partial) VVTranslateViewLayoutOpts: VVTranslateViewLayoutConfig
+---@class (partial) VVTranslateViewKeymapsOpts: VVTranslateViewKeymaps
+---@class (partial) VVTranslateLoadingOpts: VVTranslateLoadingConfig
+---@class (partial) VVTranslateViewOpts: VVTranslateViewConfig
+---@field layout? VVTranslateViewLayoutOpts
+---@field keymaps? VVTranslateViewKeymapsOpts
+---@field loading? VVTranslateLoadingOpts
+
+---`setup()` 输入配置，由 `VVTranslateConfig` 派生，所有字段可选
+---@class (partial) VVTranslateOpts: VVTranslateConfig
+---@field view? VVTranslateViewOpts
 
 ---@class VVTranslateTextOptions
 ---@field identifier? boolean 是否按代码标识符规范化 @default false
@@ -319,33 +333,33 @@ return M
 ---@field error? vim.api.keyset.highlight 错误 @default link DiagnosticError
 
 ---@class VVTranslateViewConfig
----@field max_width? integer 最大宽度；默认 72
----@field max_height? integer 最大高度；默认 16
----@field wrap? boolean 单栏时是否换行；双栏已预先折行，固定不换行 @default true
----@field hints? boolean 在浮窗底部边框显示关闭/滚动按键提示，键取自 keymaps；loading 帧占用 footer 时暂时让位 @default false
----@field layout? VVTranslateViewLayoutConfig 带原文/译文分段的长内容排版
----@field keymaps? VVTranslateViewKeymaps 来源 buffer 的临时浮窗控制键
----@field loading? VVTranslateLoadingConfig loading 动画配置
----@field window? vim.api.keyset.win_config 不含动态计算的 width、height 和 title
+---@field max_width integer 最大宽度 @default 72
+---@field max_height integer 最大高度 @default 16
+---@field wrap boolean 单栏时是否换行；双栏已预先折行，固定不换行 @default true
+---@field hints boolean 在浮窗底部边框显示关闭/滚动按键提示，键取自 keymaps；loading 帧占用 footer 时暂时让位 @default false
+---@field layout VVTranslateViewLayoutConfig 带原文/译文分段的长内容排版
+---@field keymaps VVTranslateViewKeymaps 来源 buffer 的临时浮窗控制键
+---@field loading VVTranslateLoadingConfig loading 动画配置
+---@field window vim.api.keyset.win_config 不含动态计算的 width、height 和 title @default { border = 'rounded', title_pos = 'center' }
 ---@field render? fun(event: VVTranslateViewEvent, context: VVTranslateRenderContext): VVTranslateContent 自定义内容 renderer
 
 ---@class VVTranslateViewLayoutConfig
----@field mode? 'auto'|'stack'|'split' auto 按高度收益自动选择双栏；stack 始终单栏；split 始终双栏 @default 'auto'
----@field min_column_width? integer auto 时单栏宽度低于此值不用双栏 @default 40
----@field max_column_width? integer 双栏单栏最大宽度 @default 80
----@field separator? string 双栏分隔符 @default ' │ '
----@field narrow? 'translation_first'|'source_first'|'translation_only' 单栏放不下且不适合双栏时的排法；放得下时保持原文在上 @default 'translation_first'
+---@field mode 'auto'|'stack'|'split' auto 按高度收益自动选择双栏；stack 始终单栏；split 始终双栏 @default 'auto'
+---@field min_column_width integer auto 时单栏宽度低于此值不用双栏 @default 40
+---@field max_column_width integer 双栏单栏最大宽度 @default 80
+---@field separator string 双栏分隔符 @default ' │ '
+---@field narrow 'translation_first'|'source_first'|'translation_only' 单栏放不下且不适合双栏时的排法；放得下时保持原文在上 @default 'translation_first'
 
 ---@class VVTranslateViewKeymaps
----@field close? string[] 关闭浮窗 @default { 'q', '<Esc>' }
----@field scroll_down? string|false 向下滚动浮窗 @default '<C-e>'
----@field scroll_up? string|false 向上滚动浮窗 @default '<C-y>'
+---@field close string[] 关闭浮窗 @default { 'q', '<Esc>' }
+---@field scroll_down string|false 向下滚动浮窗；false 不映射 @default '<C-e>'
+---@field scroll_up string|false 向上滚动浮窗；false 不映射 @default '<C-y>'
 
 ---@class VVTranslateLoadingConfig
----@field preset? 'braille'|'dots'|'bounce' vv-utils.loading 预设 @default 'braille'
+---@field preset 'braille'|'dots'|'bounce' vv-utils.loading 预设 @default 'braille'
 ---@field frames? string[] 自定义动画帧；优先于 preset
----@field interval_ms? integer 帧间隔 @default 80
----@field hl? string 高亮组 @default 'VVTranslatePhonetic'
+---@field interval_ms integer 帧间隔 @default 80
+---@field hl string 高亮组 @default 'VVTranslatePhonetic'
 ---@field prefix? string 帧前缀 @default ' '
----@field virt_text_pos? 'eol'|'inline'|'right_align' 最后一行的帧位置；内容超过 max_height 时帧改在浮窗 footer @default 'eol'
+---@field virt_text_pos 'eol'|'inline'|'right_align' 最后一行的帧位置；内容超过 max_height 时帧改在浮窗 footer @default 'eol'
 ---@field hl_mode? 'replace'|'combine'|'blend' @default 'combine'
